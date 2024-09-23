@@ -8,7 +8,7 @@ package txpool
 import (
 	"math"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -42,7 +42,7 @@ func newTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef
 
 	tx := builder.BlockRef(blockRef).
 		Expiration(expiration).
-		Nonce(rand.Uint64()). // nolint:gosec
+		Nonce(rand.Uint64()). // #nosec
 		DependsOn(dependsOn).
 		Features(features).
 		Gas(gas).Build()
@@ -61,7 +61,7 @@ func newDelegatedTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx
 
 	tx := builder.BlockRef(blockRef).
 		Expiration(expiration).
-		Nonce(rand.Uint64()). // nolint:gosec
+		Nonce(rand.Uint64()). // #nosec
 		DependsOn(dependsOn).
 		Features(features).
 		Gas(gas).Build()

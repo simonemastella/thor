@@ -7,7 +7,7 @@ package node
 
 import (
 	"bytes"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"testing"
 
@@ -20,7 +20,7 @@ import (
 )
 
 func newTx() *tx.Transaction {
-	tx := new(tx.Builder).Nonce(rand.Uint64()).Build() // nolint:gosec
+	tx := new(tx.Builder).Nonce(rand.Uint64()).Build() // #nosec
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	return tx.WithSignature(sig)
 }

@@ -7,7 +7,7 @@ package txpool
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"sync/atomic"
 	"time"
