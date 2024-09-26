@@ -7,6 +7,7 @@ package transactions
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -43,6 +44,26 @@ func (c *Clause) String() string {
 		)`, c.To,
 		c.Value,
 		c.Data)
+}
+
+// Scheduled Transaction transaction
+
+type RawScheduledTx struct {
+	Raw  string    `json:"raw"`
+	Time time.Time `json:"time"`
+}
+
+func (rtx *RawScheduledTx) decode() (*tx.Transaction, *time.Time, error) {
+	data, err := hexutil.Decode(rtx.Raw)
+	if err != nil {
+		return nil, nil, err
+	}
+	var tx *tx.Transaction
+	if err := rlp.DecodeBytes(data, &tx); err != nil {
+		return nil, nil, err
+	}
+
+	return tx, &rtx.Time, nil
 }
 
 // Transaction transaction

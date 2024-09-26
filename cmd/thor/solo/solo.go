@@ -42,6 +42,7 @@ type Solo struct {
 	repo          *chain.Repository
 	stater        *state.Stater
 	txPool        *txpool.TxPool
+	txPoolCron    *txpool.TxPool
 	packer        *packer.Packer
 	logDB         *logdb.LogDB
 	gasLimit      uint64
@@ -64,9 +65,10 @@ func New(
 	forkConfig thor.ForkConfig,
 ) *Solo {
 	return &Solo{
-		repo:   repo,
-		stater: stater,
-		txPool: txPool,
+		repo:       repo,
+		stater:     stater,
+		txPool:     txPool,
+		txPoolCron: txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Hour}),
 		packer: packer.New(
 			repo,
 			stater,
@@ -105,6 +107,8 @@ func (s *Solo) Run(ctx context.Context) error {
 
 func (s *Solo) loop(ctx context.Context) {
 	for {
+		txs := s.txPoolCron.Executables()
+		logger.Info(fmt.Sprintf("HEY BRO %v", len(txs)))
 		select {
 		case <-ctx.Done():
 			logger.Info("stopping interval packing service......")

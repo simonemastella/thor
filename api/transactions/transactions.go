@@ -6,6 +6,8 @@
 package transactions
 
 import (
+	"fmt"
+	"math/big"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -14,8 +16,14 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
+)
+
+var (
+	logger       = log.WithContext("pkg", "solo")
+	baseGasPrice = big.NewInt(1e13)
 )
 
 type Transactions struct {
@@ -137,6 +145,32 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 		"id": tx.ID().String(),
 	})
 }
+func (t *Transactions) handleScheduleTransaction(w http.ResponseWriter, req *http.Request) error {
+	// TODO qui non vanno pushate nella pool ma in una nuova struttura
+	var rawTx *RawScheduledTx
+	if err := utils.ParseJSON(req.Body, &rawTx); err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "body"))
+	}
+	tx, time, err := rawTx.decode()
+	logger.Info(fmt.Sprintf("received schedule for: %v", time))
+
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "raw"))
+	}
+
+	if err := t.pool.AddLocal(tx); err != nil {
+		if txpool.IsBadTx(err) {
+			return utils.BadRequest(err)
+		}
+		if txpool.IsTxRejected(err) {
+			return utils.Forbidden(err)
+		}
+		return err
+	}
+	return utils.WriteJSON(w, map[string]string{
+		"id": tx.ID().String(),
+	})
+}
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {
 	id := mux.Vars(req)["id"]
@@ -221,6 +255,10 @@ func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodPost).
 		Name("transactions_send_tx").
 		HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction))
+	sub.Path("/schedule").
+		Methods(http.MethodPost).
+		Name("transactions_schedule_tx").
+		HandlerFunc(utils.WrapHandlerFunc(t.handleScheduleTransaction))
 	sub.Path("/{id}").
 		Methods(http.MethodGet).
 		Name("transactions_get_tx").
