@@ -28,14 +28,16 @@ var (
 )
 
 type Transactions struct {
-	repo *chain.Repository
-	pool *txpool.TxPool
+	repo     *chain.Repository
+	pool     *txpool.TxPool
+	schedule *schedule.Schedule
 }
 
-func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
+func New(repo *chain.Repository, pool *txpool.TxPool, schedule *schedule.Schedule) *Transactions {
 	return &Transactions{
 		repo,
 		pool,
+		schedule,
 	}
 }
 
@@ -147,7 +149,6 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 	})
 }
 func (t *Transactions) handleScheduleTransaction(w http.ResponseWriter, req *http.Request) error {
-	// TODO qui non vanno pushate nella pool ma in una nuova struttura
 	var rawTx *RawScheduledTx
 	if err := utils.ParseJSON(req.Body, &rawTx); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
@@ -159,9 +160,10 @@ func (t *Transactions) handleScheduleTransaction(w http.ResponseWriter, req *htt
 		return utils.BadRequest(errors.WithMessage(err, "raw"))
 	}
 
-	schedule.Push(tx, *time)
+	t.schedule.Push(tx, *time)
 	logger.Info(fmt.Sprintf("pushed tx %v", tx.ID().String()))
-	logger.Info(fmt.Sprintf("TOTAL %v", schedule.Len()))
+	size, _ := t.schedule.Len()
+	logger.Info(fmt.Sprintf("TOTAL %v", size))
 
 	return utils.WriteJSON(w, map[string]string{
 		"id": tx.ID().String(),

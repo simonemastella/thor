@@ -29,6 +29,7 @@ import (
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/schedule"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
@@ -156,6 +157,24 @@ func main() {
 	}
 }
 
+func initSchedule() *schedule.Schedule {
+	dbPath := filepath.Join(".", "data", "schedule.db")
+	dbDir := filepath.Dir(dbPath)
+	err := os.MkdirAll(dbDir, 0755)
+	if err != nil {
+		log.Error("Failed to create database directory: %v", err)
+	}
+
+	s, err := schedule.NewSchedule(dbPath)
+	if err != nil {
+		log.Error("Failed to create schedule: %v", err)
+	}
+	if s == nil {
+		log.Error("Schedule is nil after creation")
+	}
+	return s
+}
+
 func defaultAction(ctx *cli.Context) error {
 	exitSignal := handleExitSignal()
 
@@ -251,6 +270,7 @@ func defaultAction(ctx *cli.Context) error {
 		repo,
 		state.NewStater(mainDB),
 		txPool,
+		initSchedule(),
 		logDB,
 		bftEngine,
 		p2pCommunicator.Communicator(),
@@ -399,10 +419,12 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	bftEngine := solo.NewBFTEngine(repo)
+	schedule := initSchedule()
 	apiHandler, apiCloser := api.New(
 		repo,
 		state.NewStater(mainDB),
 		txPool,
+		schedule,
 		logDB,
 		bftEngine,
 		&solo.Communicator{},
@@ -444,6 +466,7 @@ func soloAction(ctx *cli.Context) error {
 		state.NewStater(mainDB),
 		logDB,
 		txPool,
+		schedule,
 		ctx.Uint64(gasLimitFlag.Name),
 		ctx.Bool(onDemandFlag.Name),
 		skipLogs,

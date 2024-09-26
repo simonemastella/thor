@@ -1,101 +1,129 @@
 package schedule
 
 import (
-	"container/heap"
-	"sync"
+	"encoding/binary"
+	"encoding/json"
+	"fmt"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/vechain/thor/v2/tx"
 )
+
+var bucketName = []byte("transactions")
 
 type Item struct {
 	Tx   *tx.Transaction
 	Date time.Time
 }
 
-type minHeap []*Item
-
-func (h minHeap) Len() int           { return len(h) }
-func (h minHeap) Less(i, j int) bool { return h[i].Date.Before(h[j].Date) }
-func (h minHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-
-func (h *minHeap) Push(x interface{}) {
-	item := x.(*Item)
-	*h = append(*h, item)
-}
-
-func (h *minHeap) Pop() interface{} {
-	old := *h
-	n := len(old)
-	item := old[n-1]
-	old[n-1] = nil
-	*h = old[0 : n-1]
-	return item
-}
-
-type HeapManager struct {
-	heap minHeap
-	mu   sync.RWMutex
-}
-
-func NewHeapManager() *HeapManager {
-	return &HeapManager{
-		heap: make(minHeap, 0),
-	}
-}
-
-func (hm *HeapManager) Push(item *Item) {
-	hm.mu.Lock()
-	defer hm.mu.Unlock()
-	heap.Push(&hm.heap, item)
-}
-
-func (hm *HeapManager) Pop() *Item {
-	hm.mu.Lock()
-	defer hm.mu.Unlock()
-	if hm.heap.Len() > 0 {
-		return heap.Pop(&hm.heap).(*Item)
-	}
-	return nil
-}
-
-func (hm *HeapManager) Top() *Item {
-	hm.mu.RLock()
-	defer hm.mu.RUnlock()
-	if hm.heap.Len() > 0 {
-		return hm.heap[0]
-	}
-	return nil
-}
-
-func (hm *HeapManager) Len() int {
-	hm.mu.RLock()
-	defer hm.mu.RUnlock()
-	return hm.heap.Len()
-}
-
 type Schedule struct {
-	heapManager *HeapManager
+	db *bolt.DB
 }
 
-func NewSchedule() *Schedule {
-	return &Schedule{
-		heapManager: NewHeapManager(),
+func NewSchedule(dbPath string) (*Schedule, error) {
+	db, err := bolt.Open(dbPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists(bucketName)
+		if err != nil {
+			return fmt.Errorf("failed to create bucket: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		db.Close() // Chiudi il database se c'è un errore
+		return nil, err
+	}
+
+	return &Schedule{db: db}, nil
 }
 
-func (s *Schedule) Push(tx *tx.Transaction, date time.Time) {
-	s.heapManager.Push(&Item{Tx: tx, Date: date})
+func (s *Schedule) Push(tx *tx.Transaction, date time.Time) error {
+	item := Item{Tx: tx, Date: date}
+	value, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+
+	return s.db.Update(func(btx *bolt.Tx) error {
+		b := btx.Bucket(bucketName)
+		key := make([]byte, 8)
+		binary.BigEndian.PutUint64(key, uint64(date.UnixNano()))
+		return b.Put(key, value)
+	})
 }
 
-func (s *Schedule) Pop() *Item {
-	return s.heapManager.Pop()
+func (s *Schedule) Pop() (*Item, error) {
+	var item *Item
+
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketName)
+		c := b.Cursor()
+		k, v := c.First()
+		if k == nil {
+			return nil // No items in the database
+		}
+
+		err := json.Unmarshal(v, &item)
+		if err != nil {
+			return err
+		}
+
+		return b.Delete(k)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return item, nil
 }
 
-func (s *Schedule) Top() *Item {
-	return s.heapManager.Top()
+func (s *Schedule) Top() (*Item, error) {
+	var item *Item
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketName)
+		c := b.Cursor()
+		k, v := c.First()
+		if k == nil {
+			return nil // No items in the database
+		}
+
+		return json.Unmarshal(v, &item)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return item, nil
 }
 
-func (s *Schedule) Len() int {
-	return s.heapManager.Len()
+func (s *Schedule) Len() (int, error) {
+	var count int
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketName)
+		c := b.Cursor()
+
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			count++
+		}
+		return nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+func (s *Schedule) Close() error {
+	return s.db.Close()
 }

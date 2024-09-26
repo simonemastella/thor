@@ -43,7 +43,7 @@ type Solo struct {
 	repo          *chain.Repository
 	stater        *state.Stater
 	txPool        *txpool.TxPool
-	txPoolCron    *txpool.TxPool
+	schedule      *schedule.Schedule
 	packer        *packer.Packer
 	logDB         *logdb.LogDB
 	gasLimit      uint64
@@ -59,6 +59,7 @@ func New(
 	stater *state.Stater,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
+	schedule *schedule.Schedule,
 	gasLimit uint64,
 	onDemand bool,
 	skipLogs bool,
@@ -66,10 +67,10 @@ func New(
 	forkConfig thor.ForkConfig,
 ) *Solo {
 	return &Solo{
-		repo:       repo,
-		stater:     stater,
-		txPool:     txPool,
-		txPoolCron: txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Hour}),
+		repo:     repo,
+		stater:   stater,
+		txPool:   txPool,
+		schedule: schedule,
 		packer: packer.New(
 			repo,
 			stater,
@@ -108,17 +109,35 @@ func (s *Solo) Run(ctx context.Context) error {
 
 func (s *Solo) loop(ctx context.Context) {
 	for {
-		txs := s.txPoolCron.Executables()
-		logger.Info(fmt.Sprintf("HEY BRO %v", len(txs)))
-		logger.Info(fmt.Sprintf("SCHEDULE %v", schedule.Top()))
 		select {
 		case <-ctx.Done():
 			logger.Info("stopping interval packing service......")
 			return
 		case <-time.After(time.Duration(1) * time.Second):
-			if schedule.Top() != nil && time.Now().Compare(schedule.Top().Date) > 0 {
-				s.txPool.Add(schedule.Pop().Tx)
+			size, err := s.schedule.Len()
+			if err != nil {
+				return
 			}
+
+			if size > 0 {
+				top, err := s.schedule.Top()
+				if err != nil {
+					return
+				}
+
+				if top != nil && time.Now().After(top.Date) {
+					item, err := s.schedule.Pop()
+					if err != nil {
+						return
+					}
+
+					logger.Info("MOVING SHIT")
+					if item != nil {
+						s.txPool.Add(item.Tx)
+					}
+				}
+			}
+
 			if left := uint64(time.Now().Unix()) % s.blockInterval; left == 0 {
 				if err := s.packing(s.txPool.Executables(), false); err != nil {
 					logger.Error("failed to pack block", "err", err)

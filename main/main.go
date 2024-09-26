@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -34,22 +37,36 @@ func signTx(tx *tx.Transaction, acc genesis.DevAccount) *tx.Transaction {
 }
 func main() {
 	acc := genesis.DevAccounts()[0]
-    schedule := schedule.NewSchedule()
+	dbPath := filepath.Join(".", "data", "schedule.db")
+	dbDir := filepath.Dir(dbPath)
+	err := os.MkdirAll(dbDir, 0755)
+	if err != nil {
+		log.Fatalf("Failed to create database directory: %v", err)
+	}
+
+	s, err := schedule.NewSchedule(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to create schedule: %v", err)
+	}
+	if s == nil {
+		log.Fatal("Schedule is nil after creation")
+	}
+	defer s.Close()
 
 	// Inserisci alcuni elementi
 	tx := newTx(0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
-	schedule.Push(tx, time.Now().Add(-2*time.Hour))
-	schedule.Push(tx, time.Now().Add(-1*time.Hour))
-	schedule.Push(tx, time.Now().Add(-4*time.Hour))
-	schedule.Push(tx, time.Now().Add(-8*time.Hour))
-	schedule.Push(tx, time.Now())
+	s.Push(tx, time.Now().Add(-2*time.Hour))
+	s.Push(tx, time.Now().Add(-1*time.Hour))
+	s.Push(tx, time.Now().Add(-4*time.Hour))
+	s.Push(tx, time.Now().Add(-8*time.Hour))
+	s.Push(tx, time.Now())
 
-	item := schedule.Top()
+	item, _ := s.Top()
 	fmt.Printf("TOP Valore: %s, Data: %v\n", item.Tx.ID(), item.Date)
 
 	// Estrai gli elementi
 	for {
-		item := schedule.Pop()
+		item, _ := s.Pop()
 		if item == nil {
 			break
 		}

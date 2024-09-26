@@ -25,6 +25,7 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/schedule"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
@@ -37,6 +38,7 @@ func New(
 	repo *chain.Repository,
 	stater *state.Stater,
 	txPool *txpool.TxPool,
+	schedule *schedule.Schedule,
 	logDB *logdb.LogDB,
 	bft bft.Committer,
 	nw node.Network,
@@ -82,7 +84,7 @@ func New(
 	}
 	blocks.New(repo, bft).
 		Mount(router, "/blocks")
-	transactions.New(repo, txPool).
+	transactions.New(repo, txPool, schedule).
 		Mount(router, "/transactions")
 	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer, bft, allowedTracers, soloMode).
 		Mount(router, "/debug")
