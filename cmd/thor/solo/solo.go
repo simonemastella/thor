@@ -26,6 +26,7 @@ import (
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/packer"
+	"github.com/vechain/thor/v2/schedule"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -109,11 +110,15 @@ func (s *Solo) loop(ctx context.Context) {
 	for {
 		txs := s.txPoolCron.Executables()
 		logger.Info(fmt.Sprintf("HEY BRO %v", len(txs)))
+		logger.Info(fmt.Sprintf("SCHEDULE %v", schedule.Top()))
 		select {
 		case <-ctx.Done():
 			logger.Info("stopping interval packing service......")
 			return
 		case <-time.After(time.Duration(1) * time.Second):
+			if schedule.Top() != nil && time.Now().Compare(schedule.Top().Date) > 0 {
+				s.txPool.Add(schedule.Pop().Tx)
+			}
 			if left := uint64(time.Now().Unix()) % s.blockInterval; left == 0 {
 				if err := s.packing(s.txPool.Executables(), false); err != nil {
 					logger.Error("failed to pack block", "err", err)

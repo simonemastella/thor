@@ -17,6 +17,7 @@ import (
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/log"
+	"github.com/vechain/thor/v2/schedule"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 )
@@ -158,15 +159,10 @@ func (t *Transactions) handleScheduleTransaction(w http.ResponseWriter, req *htt
 		return utils.BadRequest(errors.WithMessage(err, "raw"))
 	}
 
-	if err := t.pool.AddLocal(tx); err != nil {
-		if txpool.IsBadTx(err) {
-			return utils.BadRequest(err)
-		}
-		if txpool.IsTxRejected(err) {
-			return utils.Forbidden(err)
-		}
-		return err
-	}
+	schedule.Push(tx, *time)
+	logger.Info(fmt.Sprintf("pushed tx %v", tx.ID().String()))
+	logger.Info(fmt.Sprintf("TOTAL %v", schedule.Len()))
+
 	return utils.WriteJSON(w, map[string]string{
 		"id": tx.ID().String(),
 	})
