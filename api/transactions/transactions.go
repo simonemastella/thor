@@ -154,16 +154,13 @@ func (t *Transactions) handleScheduleTransaction(w http.ResponseWriter, req *htt
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
 	tx, time, err := rawTx.decode()
-	logger.Info(fmt.Sprintf("received schedule for: %v", time))
-
+	//TODOmast refuse tx in the past
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "raw"))
 	}
 
 	t.schedule.Push(tx, *time)
-	logger.Info(fmt.Sprintf("pushed tx %v", tx.ID().String()))
-	size, _ := t.schedule.Len()
-	logger.Info(fmt.Sprintf("TOTAL %v", size))
+	logger.Info(fmt.Sprintf("received a schedule, total (%v)", t.schedule.Len()))
 
 	return utils.WriteJSON(w, map[string]string{
 		"id": tx.ID().String(),

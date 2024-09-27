@@ -7,6 +7,7 @@ package solo
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -95,6 +96,8 @@ func (s *Solo) Run(ctx context.Context) error {
 	}()
 
 	logger.Info("prepared to pack block")
+	conv := []byte{s.repo.ChainTag()}
+	logger.Info(fmt.Sprintf("ChainID %v", hex.EncodeToString(conv)))
 
 	if err := s.init(ctx); err != nil {
 		return err
@@ -114,12 +117,9 @@ func (s *Solo) loop(ctx context.Context) {
 			logger.Info("stopping interval packing service......")
 			return
 		case <-time.After(time.Duration(1) * time.Second):
-			size, err := s.schedule.Len()
-			if err != nil {
-				return
-			}
-
-			if size > 0 {
+			//pushing on the schedule
+			//TODOmast this should be a while loop
+			if s.schedule.Len() > 0 {
 				top, err := s.schedule.Top()
 				if err != nil {
 					return
@@ -133,10 +133,14 @@ func (s *Solo) loop(ctx context.Context) {
 
 					logger.Info("MOVING SHIT")
 					if item != nil {
-						s.txPool.Add(item.Tx)
+						logger.Info(item.Tx.String())
+
+						err = s.txPool.AddLocal(item.Tx)
+						logger.Info("err %v", err)
 					}
 				}
 			}
+			//end emptying the schedule
 
 			if left := uint64(time.Now().Unix()) % s.blockInterval; left == 0 {
 				if err := s.packing(s.txPool.Executables(), false); err != nil {

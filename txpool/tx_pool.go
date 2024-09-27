@@ -7,6 +7,8 @@ package txpool
 
 import (
 	"context"
+	"encoding/hex"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"os"
@@ -223,6 +225,10 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 	// validation
 	switch {
 	case newTx.ChainTag() != p.repo.ChainTag():
+
+		rec := []byte{newTx.ChainTag()}
+		exp := []byte{p.repo.ChainTag()}
+		fmt.Printf("received %v | expected %v ", hex.EncodeToString(rec), hex.EncodeToString(exp))
 		return badTxError{"chain tag mismatch"}
 	case newTx.Size() > maxTxSize:
 		return txRejectedError{"size too large"}

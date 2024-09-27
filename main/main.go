@@ -61,8 +61,7 @@ func main() {
 	s.Push(tx, time.Now().Add(-8*time.Hour))
 	s.Push(tx, time.Now())
 
-	item, _ := s.Top()
-	fmt.Printf("TOP Valore: %s, Data: %v\n", item.Tx.ID(), item.Date)
+	fmt.Printf("LEN IS %v", s.Len())
 
 	// Estrai gli elementi
 	for {
